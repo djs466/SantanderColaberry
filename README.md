@@ -1,6 +1,3 @@
-# SantanderColaberry
-Coding Practice for Colaberry
-
 1.  Data Modeling - code taken from api.models.py
     
         class raw_weather_data(models.Model):
@@ -121,16 +118,19 @@ Coding Practice for Colaberry
             new_analyzed_data.save()
 
 4. API
+
     To run the API, please follow these steps from the root directory:
         1.) Run: pip install -r requirements.txt
         2.) Run python manage.py migrate 
-	    3.) Run: python manage.py loaddata database.json
-        4.) Run: python manage.py runserver
-        5.) Overview of urls is available at http://127.0.0.1:8000/api/
-        6.) Swagger endpoint: http://127.0.0.1:8000/api/schema/swagger-ui/
-        7.) Schema documentation available at http://127.0.0.1:8000/api/schema/
+	    3.) Extract the contents of database.zip file into the root directory
+        4.) Run: python manage.py loaddata database.json
+        5.) Run: python manage.py runserver
+        6.) Overview of urls is available at http://127.0.0.1:8000/api/
+        7.) Swagger endpoint: http://127.0.0.1:8000/api/schema/swagger-ui/
+        8.) Schema documentation available at http://127.0.0.1:8000/api/schema/
 
-5. Bonus - hosting
+6. Bonus - hosting
+
     In order to host my API and related code in the AWS environment I would do the following:
         1.) Set up my sqllite database as a AWS RDS database.
         2.) Set up the ingest_analyze.py as a lambda functions in AWS so they can be run in the cloud and update the database at a low cost.
