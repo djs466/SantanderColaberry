@@ -1,0 +1,6 @@
+Datetime: 2024-06-14 11:45:51.984478, Number of records processed: 1729957, Amount of time taken: 0:01:50.111960
+Method of ingestion: fast, Datetime: 2024-06-14 12:21:53.114091, Number of records processed: 1729790, Amount of time taken: 0:00:03.758955
+Method of ingestion: slow, Datetime: 2024-06-14 12:22:26.503744, Number of records processed: 0, Amount of time taken: 0:00:11.690341
+Method of ingestion: slow, Datetime: 2024-06-14 12:35:57.610755, Number of records processed: 1729957, Amount of time taken: 0:01:36.689462
+Method of ingestion: fast, Datetime: 2024-06-14 12:44:07.174974, Number of records processed: 1729790, Amount of time taken: 0:00:03.800648
+Method of ingestion: slow, Datetime: 2024-06-14 13:12:31.668611, Number of records processed: 1729957, Amount of time taken: 0:00:23.193815
