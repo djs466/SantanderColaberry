@@ -1,140 +1,143 @@
 1.  Data Modeling - code taken from api.models.py
-    
-        class raw_weather_data(models.Model):
-            """
-            This model stores objects that contain the raw data from the .txt files.
+	
+		class raw_weather_data(models.Model):
+			"""
+			This model stores objects that contain the raw data from the .txt files.
 
-            JSON objects were used to store the year, max & min temp, & precipitation rather than individual model fields,
-            because it was faster and required the creation of fewer objects.
-            
-            Attributes:
-                weather_station_name: (str) The station name/id that is its unique identifier. i.e. USC00110072
-                year: (int) the year of data collection. These values range from [1985-2014]
-                daily_weather_data: (json) All of the data ingested from a single .txt file. 
-                    Organized as a nested list, as such: [[...],[date, max_temp, min_temp, precipitation],[...]]
-            """
-            weather_station_name = models.CharField(max_length=15, blank=False, unique=False, default=None)
-            year = models.IntegerField()
-            daily_weather_data = models.JSONField(default=None)
+			JSON objects were used to store the year, max & min temp, & precipitation rather than individual model fields,
+			because it was faster and required the creation of fewer objects.
+			
+			Attributes:
+				weather_station_name: (str) The station name/id that is its unique identifier. i.e. USC00110072
+				year: (int) the year of data collection. These values range from [1985-2014]
+				daily_weather_data: (json) All of the data ingested from a single .txt file. 
+					Organized as a nested list, as such: [[...],[date, max_temp, min_temp, precipitation],[...]]
+			"""
+			weather_station_name = models.CharField(max_length=15, blank=False, unique=False, default=None)
+			year = models.IntegerField()
+			daily_weather_data = models.JSONField(default=None)
 
 
-        class analyzed_weather_data(models.Model):
-            """
-            This model stores the analyzed data produced for each weather station. Representing the calculated annual
-            average max temp, min temp, and total precipitation
+		class analyzed_weather_data(models.Model):
+			"""
+			This model stores the analyzed data produced for each weather station. Representing the calculated annual
+			average max temp, min temp, and total precipitation
 
-            Attributes:
-                weather_station_name: (str) The station name/id that is its unique identifier. i.e. USC00110072
-                year: (int) the year of data collection. These values range from [1985-2014]
-                avg_max_temp: (float) The average annual maximum temperature in degrees Celsius.
-                avg_min_temp: (float) The average annual minimum temperature in degrees Celsius.
-                precipitation: (float) The total annual precipitation in cm.
-            """
-            weather_station_name = models.CharField(max_length=15, blank=False, unique=False, default=None)
-            year = models.IntegerField()
-            avg_max_temp = models.FloatField(null=True)
-            avg_min_temp = models.FloatField(null=True)
-            precipitation = models.FloatField(null=True)
+			Attributes:
+				weather_station_name: (str) The station name/id that is its unique identifier. i.e. USC00110072
+				year: (int) the year of data collection. These values range from [1985-2014]
+				avg_max_temp: (float) The average annual maximum temperature in degrees Celsius.
+				avg_min_temp: (float) The average annual minimum temperature in degrees Celsius.
+				precipitation: (float) The total annual precipitation in cm.
+			"""
+			weather_station_name = models.CharField(max_length=15, blank=False, unique=False, default=None)
+			year = models.IntegerField()
+			avg_max_temp = models.FloatField(null=True)
+			avg_min_temp = models.FloatField(null=True)
+			precipitation = models.FloatField(null=True)
 
-            def __str__(self):
-                return self.weather_station_name
-    
+			def __str__(self):
+				return self.weather_station_name
+	
 2. Ingestion - Code taken from ingest_analyze.py. I made two versions of the ingestion and analysis functions, one that loads the data into objects fast and another which improves the speed of the UI and allows for filtering the raw data by year. The ingestion takes approximately 3 seconds for the fast solution or 1 minute 30 seconds for the slower more detailed solution. The slower solution that offered a better UI and more filtering is below.
-    
-    def read_files(root_directory: str) -> None:
-        """
-        Fruitless function that adds new raw weather_data objects into the database from the files present in the root_directory provided.
 
-        If a weather station's raw data is already present in the database then ingestion is skipped to prevent duplication. 
-        Run-time and total records ingested is stored in the file './logs/ingestion_log.txt'
-        
-        Args:
-            root_directory: a string that provides the path to the folder where all the whether data is present. Default is: '../wx_data/'
-        """
-        start_time = dt.datetime.now()
-        no_of_records = 0
-        weather_stations_in_db = raw_weather_data.objects.all().values_list('weather_station_name', flat='True')
-        filenames = os.listdir(root_directory)
-        for file in filenames:
-            station_name = file[:-4]
-            #1.) Check to see if there is already data for the weather station in the database.
-            if station_name in weather_stations_in_db:
-                pass
-            else:
-                #2.) If the data for this station does not exist in the database then read it from the txt file.
-                daily_data = pd.read_csv(root_directory + file, delimiter = '\t', header = None)
-                daily_data['year'] = daily_data[0].map(str).str[:4] # converts data values to string so that the year can be spliced.
-                daily_data_years_list = [groups for df, groups in daily_data.groupby('year')] #Breaks up dataframe into seperate dataframes based on year.
-                #It is significantly faster to not break up the dataframe by year and exclude the field from the raw_weather_data model, 
-                #but this allows for filtering by year in the API.
-
-                #3.) Load the dataframes to JSON objects and create new raw data objects in the database for it.
-                for daily_data_df in daily_data_years_list:
-                    year = int(daily_data_df['year'].unique()[0])
-                    weather_data_json = json.loads(daily_data_df[[0,1,2,3]].to_json(orient='values'))
-
-                    new_raw_data_obj = raw_weather_data()
-                    new_raw_data_obj.weather_station_name = station_name
-                    new_raw_data_obj.year = year
-                    new_raw_data_obj.daily_weather_data = weather_data_json
-                    new_raw_data_obj.save()
-                no_of_records += daily_data.shape[0]
-        time_delta = dt.datetime.now() - start_time
-        new_log_data = f'Method of ingestion: slow, Datetime: {start_time}, Number of records processed: {no_of_records}, Amount of time taken: {time_delta}\n'
-        log_file = open('./logs/ingestion_log.txt', 'a')
-        log_file.write(new_log_data)
-        log_file.close()
+ 
+		def read_files(root_directory: str) -> None:
+			"""
+			Fruitless function that adds new raw weather_data objects into the database from the files present in the root_directory provided.
+	
+			If a weather station's raw data is already present in the database then ingestion is skipped to prevent duplication. 
+			Run-time and total records ingested is stored in the file './logs/ingestion_log.txt'
+			
+			Args:
+				root_directory: a string that provides the path to the folder where all the whether data is present. Default is: '../wx_data/'
+			"""
+			start_time = dt.datetime.now()
+			no_of_records = 0
+			weather_stations_in_db = raw_weather_data.objects.all().values_list('weather_station_name', flat='True')
+			filenames = os.listdir(root_directory)
+			for file in filenames:
+				station_name = file[:-4]
+				#1.) Check to see if there is already data for the weather station in the database.
+				if station_name in weather_stations_in_db:
+					pass
+				else:
+					#2.) If the data for this station does not exist in the database then read it from the txt file.
+					daily_data = pd.read_csv(root_directory + file, delimiter = '\t', header = None)
+					daily_data['year'] = daily_data[0].map(str).str[:4] # converts data values to string so that the year can be spliced.
+					daily_data_years_list = [groups for df, groups in daily_data.groupby('year')] #Breaks up dataframe into seperate dataframes based on year.
+					#It is significantly faster to not break up the dataframe by year and exclude the field from the raw_weather_data model, 
+					#but this allows for filtering by year in the API.
+	
+					#3.) Load the dataframes to JSON objects and create new raw data objects in the database for it.
+					for daily_data_df in daily_data_years_list:
+						year = int(daily_data_df['year'].unique()[0])
+						weather_data_json = json.loads(daily_data_df[[0,1,2,3]].to_json(orient='values'))
+	
+						new_raw_data_obj = raw_weather_data()
+						new_raw_data_obj.weather_station_name = station_name
+						new_raw_data_obj.year = year
+						new_raw_data_obj.daily_weather_data = weather_data_json
+						new_raw_data_obj.save()
+					no_of_records += daily_data.shape[0]
+			time_delta = dt.datetime.now() - start_time
+			new_log_data = f'Method of ingestion: slow, Datetime: {start_time}, Number of records processed: {no_of_records}, Amount of time taken: {time_delta}\n'
+			log_file = open('./logs/ingestion_log.txt', 'a')
+			log_file.write(new_log_data)
+			log_file.close()
 
 
 3. Analysis. Code taken form ingest_analyze.py 
 
-    def analysis() -> None:
-        """
-        Fruitless function that refreshes all of the analyzed_weather_data objects in the database by calculating
-        their annual average maximum & minimum temperature (*C) and total yearly precipitation (cm).
-        """
-        weather_stations = raw_weather_data.objects.all() #Pulls all raw data seperated by name and year
-        existing_stations = analyzed_weather_data.objects.all().delete() #Clear out existing data in the database, so it can rerun with creating duplicates
-        
-        for station in weather_stations:
-            station_name = station.weather_station_name
-            current_year = station.year
-            #Pulls the raw data for a specific weather station and year from the database and loads it into a pandas DataFrame. 
-            annual_data = pd.DataFrame(station.daily_weather_data, columns = ['Date','Max','Min','Precipitation'])
-            annual_data.replace(-9999, None, inplace = True)
-            
-            #loop through all of the years present in the raw data, and calculate annual avg. temperatures and total precipitation.
-            avg_max_temp_C = annual_data['Max'].mean() / 10 #Divide by 10 to put temperature in standard celsius units
-            avg_min_temp_C = annual_data['Min'].mean() / 10 #Skip NA values is default behavior
-            annual_precipitation = annual_data['Precipitation'].sum() / 100 #Divide by 100 to change units from tenths of mm to cm
 
-            #Create new object in database with analyzed data
-            new_analyzed_data = analyzed_weather_data(weather_station_name = station_name,
-                                                        year = current_year,
-                                                        avg_max_temp = round(avg_max_temp_C, 2),
-                                                        avg_min_temp = round(avg_min_temp_C, 2),
-                                                        precipitation = annual_precipitation,
-            )
-            new_analyzed_data.save()
+		def analysis() -> None:
+			"""
+			Fruitless function that refreshes all of the analyzed_weather_data objects in the database by calculating
+			their annual average maximum & minimum temperature (*C) and total yearly precipitation (cm).
+			"""
+			weather_stations = raw_weather_data.objects.all() #Pulls all raw data seperated by name and year
+			existing_stations = analyzed_weather_data.objects.all().delete() #Clear out existing data in the database, so it can rerun with creating duplicates
+			
+			for station in weather_stations:
+				station_name = station.weather_station_name
+				current_year = station.year
+				#Pulls the raw data for a specific weather station and year from the database and loads it into a pandas DataFrame. 
+				annual_data = pd.DataFrame(station.daily_weather_data, columns = ['Date','Max','Min','Precipitation'])
+				annual_data.replace(-9999, None, inplace = True)
+				
+				#loop through all of the years present in the raw data, and calculate annual avg. temperatures and total precipitation.
+				avg_max_temp_C = annual_data['Max'].mean() / 10 #Divide by 10 to put temperature in standard celsius units
+				avg_min_temp_C = annual_data['Min'].mean() / 10 #Skip NA values is default behavior
+				annual_precipitation = annual_data['Precipitation'].sum() / 100 #Divide by 100 to change units from tenths of mm to cm
+	
+				#Create new object in database with analyzed data
+				new_analyzed_data = analyzed_weather_data(weather_station_name = station_name,
+															year = current_year,
+															avg_max_temp = round(avg_max_temp_C, 2),
+															avg_min_temp = round(avg_min_temp_C, 2),
+															precipitation = annual_precipitation,
+				)
+				new_analyzed_data.save()
 
 4. API
+	
+	 	To run the API, please follow these steps from the root directory:
+			1.) Run: pip install -r requirements.txt
+			2.) Run python manage.py migrate 
+			3.) Extract the contents of database.zip file into the root directory
+			4.) Run: python manage.py loaddata database.json
+			5.) Run: python manage.py runserver
+			6.) Overview of urls is available at http://127.0.0.1:8000/api/
+			7.) Swagger endpoint: http://127.0.0.1:8000/api/schema/swagger-ui/
+			8.) Schema documentation available at http://127.0.0.1:8000/api/schema/
 
-    To run the API, please follow these steps from the root directory:
-        1.) Run: pip install -r requirements.txt
-        2.) Run python manage.py migrate 
-	    3.) Extract the contents of database.zip file into the root directory
-        4.) Run: python manage.py loaddata database.json
-        5.) Run: python manage.py runserver
-        6.) Overview of urls is available at http://127.0.0.1:8000/api/
-        7.) Swagger endpoint: http://127.0.0.1:8000/api/schema/swagger-ui/
-        8.) Schema documentation available at http://127.0.0.1:8000/api/schema/
+5. Bonus - hosting
+	
+	 	In order to host my API and related code in the AWS environment I would do the following:
+			1.) Set up my sqllite database as a AWS RDS database.
+			2.) Set up the ingest_analyze.py as a lambda functions in AWS so they can be run in the cloud and update the database at a low cost.
+			3.) Dockerize project and deploy to elastic beanstalk, this is ideal but is charged per hour even when there is no traffic. EC2 may be a more cost effective chose for deploying. A connection to our RDS is possible in the console.
+			4.) If a custom domain is requested then purchase it with route 53 and route the traffic from the custom url to my elastic beanstalk environment.
+			5.) If Single-Sign-On and a verified private network are required, then I would AWS SSO with AWS Client VPN for authentication and authorization
 
-6. Bonus - hosting
-
-    In order to host my API and related code in the AWS environment I would do the following:
-        1.) Set up my sqllite database as a AWS RDS database.
-        2.) Set up the ingest_analyze.py as a lambda functions in AWS so they can be run in the cloud and update the database at a low cost.
-        3.) Dockerize project and deploy to elastic beanstalk, this is ideal but is charged per hour even when there is no traffic. EC2 may be a more cost effective chose for deploying. A connection to our RDS is possible in the console.
-        4.) If a custom domain is requested then purchase it with route 53 and route the traffic from the custom url to my elastic beanstalk environment.
-        5.) If Single-Sign-On and a verified private network are required, then I would AWS SSO with AWS Client VPN for authentication and authorization
 
