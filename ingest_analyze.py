@@ -79,4 +79,8 @@ def analysis() -> None:
                                                     precipitation = annual_precipitation,
         )
         new_analyzed_data.save()
-        
+
+
+if __name__ == '__main__':
+    read_files('./wx_data')
+    analysis()
